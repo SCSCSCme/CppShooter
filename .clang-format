@@ -1,0 +1,13 @@
+# 基于某种现有风格
+BasedOnStyle: LLVM
+# 缩进宽度
+IndentWidth: 4
+# 不使用Tab，使用空格
+UseTab: Never
+# 大括号样式设置为自定义
+BreakBeforeBraces: Custom
+# 定义大括号换行规则
+BraceWrapping:
+  AfterClass: false
+  AfterControlStatement: false
+  AfterFunction: false

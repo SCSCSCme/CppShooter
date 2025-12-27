@@ -1,7 +1,7 @@
 [
 {
   "directory": "/home/wokrlie/Projects/CppShooter/build",
-  "command": "/usr/bin/clang++ -DFMT_SHARED -g -std=gnu++17 -o CMakeFiles/CppShooter.dir/main.cpp.o -c /home/wokrlie/Projects/CppShooter/main.cpp",
+  "command": "/usr/bin/c++ -DFMT_SHARED -g -std=gnu++17 -o CMakeFiles/CppShooter.dir/main.cpp.o -c /home/wokrlie/Projects/CppShooter/main.cpp",
   "file": "/home/wokrlie/Projects/CppShooter/main.cpp",
   "output": "/home/wokrlie/Projects/CppShooter/build/CMakeFiles/CppShooter.dir/main.cpp.o"
 }

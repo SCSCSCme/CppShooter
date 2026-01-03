@@ -2,7 +2,6 @@
 #error "Error: This program doesn't support macOS."
 #endif
 
-#define GLFW_INCLUDE_VULKAN
 #include <GLFW/glfw3.h>
 #include <spdlog/spdlog.h>
 #include <vulkan/vulkan_raii.hpp>
@@ -13,17 +12,39 @@
 #include <string>
 #include <vector>
 
-static int32_t window_width;
-static int32_t window_height;
-static const char* app_name	= "CppShooter";
-static std::unique_ptr<vk::raii::Context> g_context	   = nullptr; // global context pointer
-static std::unique_ptr<vk::raii::Instance> g_instance  = nullptr;
+struct properties {
+	int32_t window_width;
+	int32_t window_height;
+	const char* app_name	= "CppShooter";
+
+	std::vector<const char *> required_extensions = {
 #ifndef NDEBUG
-static vk::raii::DebugUtilsMessengerEXT g_debug_messenger = nullptr;
+		"VK_EXT_debug_utils",
 #endif
-static std::unique_ptr<vk::raii::SurfaceKHR> g_surface = nullptr; 
-static GLFWwindow* window = nullptr;
-static std::unique_ptr<vk::raii::Device> g_device = nullptr;
+	};
+
+	std::vector<const char*> required_layers = {
+#ifndef NDEBUG					// DEBUG mode enable validation layer
+		"VK_LAYER_KHRONOS_validation",
+#endif
+	};
+
+	std::vector<const char*> device_required_extensions = {
+		VK_KHR_SWAPCHAIN_EXTENSION_NAME
+	};
+
+};
+
+struct vulkan_context {
+	GLFWwindow* window = nullptr;
+	vk::raii::Context g_context;
+	vk::raii::Instance g_instance = nullptr;
+#ifndef NDEBUG
+	vk::raii::DebugUtilsMessengerEXT g_debug_messenger = nullptr;
+#endif
+	vk::raii::SurfaceKHR g_surface = nullptr; 
+	vk::raii::Device g_device = nullptr;
+};
 
 struct queue_family_indices {
 	std::optional<uint32_t> graphics_family;
@@ -34,21 +55,6 @@ struct queue_family_indices {
 	}
 };
 
-static std::vector<const char *> required_extensions = {
-#ifndef NDEBUG
-	"VK_EXT_debug_utils",
-#endif
-};
-
-static std::vector<const char*> required_layers = {
-#ifndef NDEBUG					// DEBUG mode enable validation layer
-	"VK_LAYER_KHRONOS_validation",
-#endif
-};
-
-static std::vector<const char*> device_required_extensions = {
-	VK_KHR_SWAPCHAIN_EXTENSION_NAME
-};
 
 void setup_envrioment() {
 	spdlog::info("Setup envrioment. ");
@@ -63,7 +69,7 @@ void setup_envrioment() {
 		case GLFW_PLATFORM_WAYLAND: platform = "Wayland"; break;
 		case GLFW_PLATFORM_X11: platform = "X11"; break;
 		case GLFW_PLATFORM_COCOA: platform = "macOS"; break;
-		case GLFW_PLATFORM_WIN32: platform = "Win32"; break;
+		default: break;
 	}
 	spdlog::info("GLFW using platform: {}", platform);
 
@@ -73,23 +79,22 @@ void setup_envrioment() {
 	if (apiVersion < 0x40000) {
 		spdlog::error("Vulkan api version is too low. ");
 	}
-	g_context = std::make_unique<vk::raii::Context>();
 	spdlog::info("Vulkan headers version: {}", VK_HEADER_VERSION);
 }
 
-void create_window() {
+void create_window(vulkan_context& ctx, const properties& props) {
 	spdlog::info("Create window. ");
-	if (window_height < 100 || window_width < 150) {
+	if (props.window_height < 100 || props.window_width < 150) {
 		spdlog::error("Window size is too small. ");
 	} 
-	window = glfwCreateWindow(window_width, window_height, "CppShooter", nullptr, nullptr); 
-	if (window == nullptr) {
+	ctx.window = glfwCreateWindow(props.window_width, props.window_height, "CppShooter", nullptr, nullptr); 
+	if (ctx.window == nullptr) {
 		spdlog::error("Failed to create window");
 	}
 	glfwShowWindow(window);
 }
 
-bool check_extensions_layers() {
+bool check_extensions_layers(vulkan_context& ctx, const properties& props) {
 	bool all_available = true;
 
 	// Get glfw required extensions
@@ -97,20 +102,20 @@ bool check_extensions_layers() {
 	const char** glfwExtensions = glfwGetRequiredInstanceExtensions(&glfwRequiredExtensionCount);
 
 	for (uint32_t i = 0; i < glfwRequiredExtensionCount; i++) {
-		required_extensions.push_back(glfwExtensions[i]);
+		props.required_extensions.push_back(glfwExtensions[i]);
 	}	
 
 	// Check the other extensions
 	if (!required_extensions.empty()) {
-		auto available_extensions = g_context->enumerateInstanceExtensionProperties();
+		auto available_extensions = ctx.context->enumerateInstanceExtensionProperties();
 		std::set<std::string> available_extensions_set;
 		for (const auto& ext : available_extensions) {
 			available_extensions_set.insert(ext.extensionName);
 		}
 
-		for (const char* ext : required_extensions) {
+		for (const char* ext : props.required_extensions) {
 			if (available_extensions_set.find(ext) == available_extensions_set.end()) {
-				printf("Missing required extension: %s\n", ext);
+				spdlog::info("Missing required extension: {}", ext);
 				all_available = false;
 			}
 		}
@@ -125,7 +130,7 @@ bool check_extensions_layers() {
 			available_layer_set.insert(layer.layerName);
 		}
 
-		for (const char* layer : required_layers) {
+		for (const char* layer : props.required_layers) {
 			if (available_layer_set.find(layer) == available_layer_set.end()) {
 				printf("Missing required layer: %s\n", layer);
 				all_available = false;
@@ -136,10 +141,10 @@ bool check_extensions_layers() {
 	return all_available;
 }
 
-void create_instance() {
+void create_instance(vulkan_context& ctx, const properties& props) {
 	spdlog::info("Create instance. ");
 	vk::ApplicationInfo appInfo(
-			app_name,                          		// pApplicationName
+			props.app_name,                          		// pApplicationName
 			VK_MAKE_VERSION(1, 0, 0),                  // applicationVersion
 			"No Engine",                               // pEngineName
 			VK_MAKE_VERSION(1, 0, 0),                  // engineVersion
@@ -153,12 +158,12 @@ void create_instance() {
 	vk::InstanceCreateInfo createInfo(
 			vk::InstanceCreateFlags(),
 			&appInfo,
-			static_cast<uint32_t>(required_layers.size()),
-			required_layers.data(),
-			static_cast<uint32_t>(required_extensions.size()),
-			required_extensions.data()
+			static_cast<uint32_t>(props.required_layers.size()),
+			props.required_layers.data(),
+			static_cast<uint32_t>(props.required_extensions.size()),
+			props.required_extensions.data()
 			);
-	g_instance = std::make_unique<vk::raii::Instance>(*g_context, createInfo);
+	ctx.instance = vk::raii::Instance(ctx.context, createInfo);
 }
 
 #ifndef NDEBUG
@@ -188,7 +193,7 @@ static VKAPI_ATTR VkBool32 VKAPI_CALL debug_callback(
 	return VK_FALSE;
 }
 
-void create_debug_messenger() {
+void create_debug_messenger(vulkan_context& ctx) {
 	vk::DebugUtilsMessengerCreateInfoEXT createInfo(
 			{},
 			vk::DebugUtilsMessageSeverityFlagBitsEXT::eError |
@@ -200,16 +205,16 @@ void create_debug_messenger() {
 			nullptr
 			);
 
-	g_debug_messenger = vk::raii::DebugUtilsMessengerEXT(*g_instance, createInfo);
+	ctx.debug_messenger = vk::raii::DebugUtilsMessengerEXT(ctx.instance, createInfo);
 }
 #endif
 
-void create_surface() {
+void create_surface(vulkan_context& ctx) {
 	spdlog::info("Create surface. ");
 	VkSurfaceKHR glfw_surface = VK_NULL_HANDLE;
 	VkResult result = glfwCreateWindowSurface(
-			**g_instance,
-			window,
+			*ctx.instance,
+			ctx.window,
 			nullptr,
 			&glfw_surface
 			);
@@ -217,12 +222,12 @@ void create_surface() {
 		spdlog::error("Failed to create surface. (GLFW)");
 	}
 
-	g_surface = std::make_unique<vk::raii::SurfaceKHR>(*g_instance, vk::SurfaceKHR(glfw_surface));
+	ctx.surface = vk::raii::SurfaceKHR(ctx.instance, vk::SurfaceKHR(glfw_surface));
 }
 
-bool check_device_extensions(const vk::raii::PhysicalDevice& device) {
+bool check_device_extensions(const vk::raii::PhysicalDevice& device, const properties& props) {
 	std::vector<vk::ExtensionProperties> available_extensions = device.enumerateDeviceExtensionProperties();
-	std::set<std::string> required(device_required_extensions.begin(), device_required_extensions.end());
+	std::set<std::string> required(props.device_required_extensions.begin(), props.device_required_extensions.end());
 	for (const auto& extension : available_extensions) {
 		required.erase(extension.extensionName);
 	}
@@ -246,12 +251,12 @@ queue_family_indices find_queue_families(const vk::raii::PhysicalDevice& device)
 	return indices;
 }
 
-vk::raii::PhysicalDevice pick_physical_device() {
-	vk::raii::PhysicalDevices physical_devices(*g_instance);
+vk::raii::PhysicalDevice pick_physical_device(vulkan_context& ctx) {
+	vk::raii::PhysicalDevices physical_devices(ctx.instance);
 	if (physical_devices.size() == 0) {
 		spdlog::error("Failed to find GPUs with Vulkan Support! ");
 	}
-	if (g_surface.get() == nullptr) {
+	if (ctx.surface.get() == nullptr) {
 		spdlog::error("Surface is null! ");
 	}
 	for (const auto& device : physical_devices) {
@@ -263,8 +268,8 @@ vk::raii::PhysicalDevice pick_physical_device() {
 			continue;
 		}
 
-		auto formats = device.getSurfaceFormatsKHR(**g_surface);
-		auto presentModes = device.getSurfacePresentModesKHR(**g_surface);
+		auto formats = device.getSurfaceFormatsKHR(*ctx.surface);
+		auto presentModes = device.getSurfacePresentModesKHR(*ctx.surface);
 		if (formats.empty() || presentModes.empty()) continue;
 
 		auto chain = device.getFeatures2<vk::PhysicalDeviceFeatures2,
@@ -287,7 +292,7 @@ vk::raii::PhysicalDevice pick_physical_device() {
 	spdlog::error("Failed to pick physical device. ");
 }
 
-void create_device() {
+void create_device(vulkan_context& ctx) {
 	vk::raii::PhysicalDevice physical_device(pick_physical_device());
 	queue_family_indices indices = find_queue_families(physical_device);
 
@@ -316,36 +321,25 @@ void create_device() {
 		.setPEnabledFeatures(&device_features)
 		.setPEnabledExtensionNames(device_extensions);
 
-	g_device = std::make_unique<vk::raii::Device>(physical_device, device_info);
+	ctx.device = vk::raii::Device(physical_device, device_info);
 }
 
-void mainloop() {
+void mainloop(vulkan_context& ctx) {
 	spdlog::info("Mainloop start. ");
 
-	if (!glfwGetWindowAttrib(window, GLFW_VISIBLE)) {
+	if (!glfwGetWindowAttrib(ctx.window, GLFW_VISIBLE)) {
 		spdlog::warn("Window not visible, showing...");
-		glfwShowWindow(window);
+		glfwShowWindow(ctx.window);
 	}
 
-	while (!glfwWindowShouldClose(window)) {
+	while (!glfwWindowShouldClose(ctx.window)) {
 		glfwPollEvents();
 	}
-}
-
-void clean_resource() {
-	spdlog::info("Clean resource. ");
-	g_surface.reset();
-	g_instance.reset();
-	g_device.reset();
-	glfwTerminate();
 }
 
 int main() {
 	spdlog::info("Program run. ");
 	setup_envrioment();
-
-	window_width = 1280;
-	window_height = 720;
 	create_window();
 	create_instance();
 	create_surface();

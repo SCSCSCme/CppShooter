@@ -14,10 +14,13 @@ find_package(glfw3 REQUIRED)
 message(STATUS "Vulkan include dir: ${Vulkan_INCLUDE_DIRS}")
 message(STATUS "Vulkan library: ${Vulkan_LIBRARIES}")
 
-add_executable(${PROJECT_NAME} main.cpp)
+add_executable(${PROJECT_NAME} main.cpp
+	managers.cpp)
 target_link_libraries(${PROJECT_NAME} PRIVATE 
 	spdlog 
 	fmt::fmt 
 	Vulkan::Vulkan
 	glfw
 )
+
+add_definitions(-DGLFW_INCLUDE_VULKAN)

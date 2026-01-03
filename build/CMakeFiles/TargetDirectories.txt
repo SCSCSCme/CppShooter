@@ -1,3 +1,0 @@
-/home/wokrlie/Projects/CppShooter/build/CMakeFiles/CppShooter.dir
-/home/wokrlie/Projects/CppShooter/build/CMakeFiles/edit_cache.dir
-/home/wokrlie/Projects/CppShooter/build/CMakeFiles/rebuild_cache.dir

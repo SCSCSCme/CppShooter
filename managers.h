@@ -16,6 +16,7 @@ class swapchain_manager {
 				vk::raii::PhysicalDevice& physical_device,
 				vk::raii::SurfaceKHR& surface,
 				GLFWwindow* window
+				queue_family_indices& indices
 				)
 			: m_device(device),
 			m_phys_device(physical_device),
@@ -24,10 +25,10 @@ class swapchain_manager {
 				spdlog::info("Swapchain manager create. ");
 		}
 
-		void recreate();
+		void recreate(uint32_t graphics_family_index, uint32_t present_family_index);
 
 	private:
-		void cleanup_swapchain();
+		void cleanup_swapchain(uint32_t graphics_family_index, uint32_t present_family_index); // it will use the param from the recreate function
 		void create_swapchain();
 
 	private:

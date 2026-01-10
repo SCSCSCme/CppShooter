@@ -295,6 +295,9 @@ vk::raii::PhysicalDevice pick_physical_device(vulkan_context& ctx) {
 void create_device(vulkan_context& ctx) {
 	vk::raii::PhysicalDevice physical_device(pick_physical_device());
 	queue_family_indices indices = find_queue_families(physical_device);
+	if (!indices.is_complete()) {
+		spdlog::error("Failed to find queue families. ");
+	}
 
 	std::set<uint32_t> unique_families = {
 		indices.graphics_family.value(),
@@ -348,6 +351,5 @@ int main() {
 #endif
 	create_device();
 	mainloop();
-	clean_resource();
 	return 0;
 }

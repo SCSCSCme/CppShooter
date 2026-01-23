@@ -5,38 +5,35 @@
 #include <spdlog/spdlog.h>
 
 enum class swapchain_status {
-	Success,
+    Success,
     OutOfDate, // 必须重建
     Suboptimal // 还可以用，但建议重建
 };
 
 class swapchain_manager {
-	public:
-		swapchain_manager(vk::raii::Device& device, 
-				vk::raii::PhysicalDevice& physical_device,
-				vk::raii::SurfaceKHR& surface,
-				GLFWwindow* window
-				queue_family_indices& indices
-				)
-			: m_device(device),
-			m_phys_device(physical_device),
-			m_surface(surface),
-			m_window(window) {
-				spdlog::info("Swapchain manager create. ");
-		}
+public:
+    swapchain_manager() = default;
 
-		void recreate(uint32_t graphics_family_index, uint32_t present_family_index);
+    swapchain_manager(vk::raii::Device* device, 
+                      vk::raii::PhysicalDevice* physical_device,
+                      vk::raii::SurfaceKHR* surface,
+                      GLFWwindow* window
+                      );
 
-	private:
-		void cleanup_swapchain(uint32_t graphics_family_index, uint32_t present_family_index); // it will use the param from the recreate function
-		void create_swapchain();
+    void recreate(uint32_t graphics_family_index, uint32_t present_family_index);
 
-	private:
-		vk::raii::SwapchainKHR swapchain = nullptr;
-		swapchain_status status;
+private:
+    void cleanup_swapchain(); 
+    void create_swapchain(uint32_t graphics_family_index, uint32_t present_family_index); // it will use the param from the recreate function
+    void create_image_views(vk::SurfaceFormatKHR selected_format);
 
-		vk::raii::Device& m_device;
-		vk::raii::PhysicalDevice& m_phys_device;
-		vk::raii::SurfaceKHR& m_surface;
-		GLFWwindow* m_window = nullptr;
+private:
+    vk::raii::SwapchainKHR m_swapchain = nullptr;
+    std::vector<vk::raii::ImageView> m_image_views {};
+    swapchain_status status;
+
+    vk::raii::Device* m_device = nullptr;
+    vk::raii::PhysicalDevice* m_phys_device = nullptr;
+    vk::SurfaceKHR m_surface = nullptr; // ! NO RAII namespace
+    GLFWwindow* m_window = nullptr;
 };
